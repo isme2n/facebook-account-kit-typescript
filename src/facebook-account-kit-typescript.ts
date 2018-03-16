@@ -95,7 +95,6 @@ export default class AccountKit {
     })
       .then(resp => resp.data)
       .then(respBody => {
-        console.log(respBody)
         if (respBody.error) {
           throw new Error(respBody.error)
         }
