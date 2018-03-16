@@ -65,7 +65,7 @@ export default class AccountKit {
       )
     })
   }
-  public logoutUser(token: string): Promise<ISuccessResp> {
+  public logoutAccount(token: string): Promise<ISuccessResp> {
     let logoutUrl = `${this.getLogoutEndpoint()}?access_token=${token}`
 
     if (this.requireAppSecret) {
@@ -80,7 +80,7 @@ export default class AccountKit {
       return respBody
     })
   }
-  public removeUser(id: string): Promise<ISuccessResp> {
+  public removeAccount(id: string): Promise<ISuccessResp> {
     const delUrl = `${this.getRemovalEndpoint(id)}?access_token=${this.getAppAccessToken()}`
 
     return this.facebookAPIRequest(delUrl, 'DELETE').then((respBody: ISuccessResp) => {
