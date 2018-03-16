@@ -1,3 +1,4 @@
+import axios from 'axios'
 import * as Request from 'request'
 import * as Querystring from 'querystring'
 import * as Crypto from 'crypto'
@@ -32,138 +33,77 @@ export default class AccountKit {
     authorizationCode: string,
     meFields?: Array<string>
   ): Promise<ISMSAccountInfo | IEmailAccountInfo> {
-    return new Promise((resolve, reject) => {
-      const params = {
-        grant_type: 'authorization_code',
-        code: authorizationCode,
-        access_token: this.getAppAccessToken()
+    const params = {
+      grant_type: 'authorization_code',
+      code: authorizationCode,
+      access_token: this.getAppAccessToken()
+    }
+
+    const tokenExchangeUrl = `${this.getTokenExchangeEnpoint()}?${Querystring.stringify(params)}`
+
+    return this.facebookAPIRequest(tokenExchangeUrl).then((respBody: ITokenReq) => {
+      let meEndpointUrl = `${this.getInfoEndpoint(meFields)}?access_token=${respBody.access_token}`
+      const token = respBody.access_token
+      const token_refresh_interval_sec = respBody.token_refresh_interval_sec
+
+      if (this.requireAppSecret) {
+        meEndpointUrl +=
+          '&appsecret_proof=' +
+          Crypto.createHmac('sha256', this.appSecret)
+            .update(respBody.access_token)
+            .digest('hex')
       }
 
-      const tokenExchangeUrl = `${this.getTokenExchangeEnpoint()}?${Querystring.stringify(params)}`
-
-      Request.get(
-        {
-          url: tokenExchangeUrl,
-          json: true
-        },
-        (error, resp, respBody: ITokenReq) => {
-          if (error) {
-            reject(error)
-            return
-          } else if (respBody.error) {
-            reject(respBody.error)
-            return
-          } else if (resp.statusCode !== 200) {
-            const errorMsg = 'Invalid AccountKit Graph API status code (' + resp.statusCode + ')'
-            reject(new Error(errorMsg))
-            return
-          }
-
-          let meEndpointUrl = `${this.getInfoEndpoint(meFields)}?access_token=${
-            respBody.access_token
-          }`
-          const token = respBody.access_token
-          const token_refresh_interval_sec = respBody.token_refresh_interval_sec
-
-          if (this.requireAppSecretValue) {
-            meEndpointUrl +=
-              '&appsecret_proof=' +
-              Crypto.createHmac('sha256', this.appSecret)
-                .update(respBody.access_token)
-                .digest('hex')
-          }
-
-          Request.get(
-            {
-              url: meEndpointUrl,
-              json: true
-            },
-            (error, resp, respBody: ISMSAccountReq | IEmailAccountReq) => {
-              if (error) {
-                reject(error)
-                return
-              } else if (respBody.error) {
-                reject(respBody.error)
-                return
-              } else if (resp.statusCode !== 200) {
-                const errorMsg = `Invalid AccountKit Graph API status code (${resp.statusCode})`
-                reject(new Error(errorMsg))
-                return
-              }
-
-              const response: ISMSAccountInfo | IEmailAccountInfo = Object.assign(respBody, {
-                access_token: token,
-                token_refresh_interval_sec: token_refresh_interval_sec
-              })
-
-              resolve(response)
-            }
-          )
+      return this.facebookAPIRequest(meEndpointUrl).then(
+        (respBody: ISMSAccountReq | IEmailAccountReq) => {
+          const response: ISMSAccountInfo | IEmailAccountInfo = Object.assign(respBody, {
+            access_token: token,
+            token_refresh_interval_sec: token_refresh_interval_sec
+          })
+          return response
         }
       )
     })
   }
   public logoutUser(token: string): Promise<ISuccessResp> {
-    return new Promise((resolve, reject) => {
-      let logoutUrl = `${this.getLogoutEndpoint()}?access_token=${token}`
+    let logoutUrl = `${this.getLogoutEndpoint()}?access_token=${token}`
 
-      if (this.requireAppSecretValue) {
-        logoutUrl +=
-          '&appsecret_proof=' +
-          Crypto.createHmac('sha256', this.appSecret)
-            .update(token)
-            .digest('hex')
-      }
+    if (this.requireAppSecret) {
+      logoutUrl +=
+        '&appsecret_proof=' +
+        Crypto.createHmac('sha256', this.appSecret)
+          .update(token)
+          .digest('hex')
+    }
 
-      Request.post(
-        {
-          url: logoutUrl,
-          json: true
-        },
-        (error, resp, respBody) => {
-          if (error) {
-            reject(error)
-            return
-          } else if (respBody.error) {
-            reject(respBody.error)
-            return
-          } else if (resp.statusCode !== 200) {
-            const errorMsg = `Invalid AccountKit Graph API status code (${resp.statusCode})`
-            reject(new Error(errorMsg))
-            return
-          }
-
-          resolve(respBody)
-        }
-      )
+    return this.facebookAPIRequest(logoutUrl, 'POST').then((respBody: ISuccessResp) => {
+      return respBody
     })
   }
   public removeUser(id: string): Promise<ISuccessResp> {
-    return new Promise((resolve, reject) => {
-      const delUrl = `${this.getRemovalEndpoint(id)}?access_token=${this.getAppAccessToken()}`
+    const delUrl = `${this.getRemovalEndpoint(id)}?access_token=${this.getAppAccessToken()}`
 
-      Request.del(
-        {
-          url: delUrl,
-          json: true
-        },
-        (error, resp, respBody) => {
-          if (error) {
-            reject(error)
-            return
-          } else if (respBody.error) {
-            reject(respBody.error)
-            return
-          } else if (resp.statusCode !== 200) {
-            const errorMsg = `Invalid AccountKit Graph API status code (${resp.statusCode})`
-            reject(new Error(errorMsg))
-            return
-          }
-
-          resolve(respBody)
-        }
-      )
+    return this.facebookAPIRequest(delUrl, 'DELETE').then((respBody: ISuccessResp) => {
+      return respBody
     })
+  }
+
+  private facebookAPIRequest(url: string, method: string = 'GET') {
+    return axios({
+      method,
+      url
+    })
+      .then(resp => resp.data)
+      .then(respBody => {
+        console.log(respBody)
+        if (respBody.error) {
+          throw new Error(respBody.error)
+        }
+        return respBody
+      })
+      .catch(error => {
+        throw new Error(error)
+      })
   }
   private getApiVersion(): string {
     return this.apiVersion

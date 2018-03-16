@@ -105,7 +105,7 @@
     "validate-commit-msg": "^2.12.2"
   },
   "dependencies": {
-    "@types/request": "^2.47.0",
-    "request": "^2.85.0"
+    "@types/axios": "^0.14.0",
+    "axios": "^0.18.0"
   }
 }
